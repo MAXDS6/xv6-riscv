@@ -10,7 +10,7 @@ Agregué dos syscalls nuevas en xv6:
 - `getancestor(int n)`: retorna el PID del ancestro n-ésimo
 
 ### Archivos modificados para esta tarea N1:
-- `kernel/syscall.h` - números de syscall (#21 y #22)
+- `kernel/syscall.h` - números de syscall (#22 y #23)
 - `kernel/syscall.c` - declaraciones y tabla
 - `kernel/sysproc.c` - implementación
 - `user/user.h` - declaraciones para usuario
