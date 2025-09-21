@@ -105,3 +105,39 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+uint64
+sys_getppid(void)
+{
+    struct proc *p = myproc();
+    if (p->parent)
+        return p->parent->pid;
+    return -1;
+}
+
+uint64
+sys_getancestor(void)
+{
+  int n;
+  struct proc *p = myproc();
+  
+  // Obtener argumento (argint no retorna valor en xv6)
+  argint(0, &n);
+    
+  // Validar entrada
+  if(n < 0)
+    return -1;
+    
+  // Caso base: n=0 es el proceso actual
+  if(n == 0)
+    return p->pid;
+    
+  // Navegar hacia arriba n niveles
+  for(int i = 0; i < n; i++) {
+    if(p->parent == 0) {
+      return -1;  // No hay más ancestros
+    }
+    p = p->parent;
+  }
+  
+  return p->pid;
+}
