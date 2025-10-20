@@ -141,3 +141,19 @@ sys_getancestor(void)
   
   return p->pid;
 }
+
+
+uint64
+sys_settickets(void)
+{
+  int n;
+  
+  // Get argument from syscall
+  argint(0, &n);
+  
+  // Validate and call settickets function
+  if(n < 1)
+    n = 1;
+  
+  return settickets(n);
+}

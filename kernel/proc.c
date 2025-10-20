@@ -124,6 +124,8 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->tickets = 100;
+  p->run_slices = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -418,47 +420,61 @@ kwait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// kernel/proc.c
+
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-
+  
   c->proc = 0;
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
+    // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    intr_off();
 
+    // Calculate total tickets of RUNNABLE processes
+    int total_tickets = 0;
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE) {
+        total_tickets += p->tickets;
+      }
+      release(&p->lock);
+    }
+    
+    // If no tickets, continue to next cycle
+    if(total_tickets == 0) {
+      continue;
+    }
+    
+    // Generate random number between 1 and total_tickets
+    unsigned long winner = (rand() % total_tickets) + 1;
+    
+    // Find the winning process
+    int accumulator = 0;
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+        accumulator += p->tickets;
+        
+        if(accumulator >= winner && !found) {
+          // This process wins the lottery
+          found = 1;
+          p->state = RUNNING;
+          p->run_slices++;
+          c->proc = p;
+          swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+          // Process is done running for now.
+          c->proc = 0;
+        }
       }
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
-    }
   }
 }
-
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
@@ -681,7 +697,32 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s", p->pid, state, p->name);
+    printf("%d %s %s tickets: %d run_slices: %d", p->pid, state, p->name, p->tickets, p->run_slices);
     printf("\n");
   }
 }
+// Lottery Scheduling: Set tickets for current process
+int
+settickets(int n)
+{
+  struct proc *p = myproc();
+  
+  acquire(&p->lock);
+  if(n < 1)
+    p->tickets = 1;  // Mínimo 1 ticket
+  else
+    p->tickets = n;
+  release(&p->lock);
+  
+  return 0;
+}
+
+static unsigned long rng_state = 20;
+
+unsigned long
+rand(void)
+{
+  rng_state = rng_state * 1664525 + 1013904223;
+  return rng_state;
+}
+
