@@ -107,3 +107,28 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+uint64
+sys_mrdprotect(void)
+{
+  uint64 addr;
+  int len;
+
+  // CAMBIO: Llamar directamente, sin 'if'
+  argaddr(0, &addr);
+  argint(1, &len);
+
+  return vm_rdprotect(myproc()->pagetable, addr, len, 0);
+}
+
+uint64
+sys_munrdprotect(void)
+{
+  uint64 addr;
+  int len;
+
+  // CAMBIO: Llamar directamente, sin 'if'
+  argaddr(0, &addr);
+  argint(1, &len);
+
+  return vm_rdprotect(myproc()->pagetable, addr, len, 1);
+}

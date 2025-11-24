@@ -484,3 +484,50 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+int
+vm_rdprotect(pagetable_t pagetable, uint64 addr, int len, int enable_read)
+{
+  uint64 a;
+  pte_t *pte;
+
+  // 1. Validar 'len'
+  if (len <= 0)
+    return -1;
+
+  // 2. Validar alineación de 'addr'
+  if (addr % PGSIZE != 0) // PGROUNDDOWN(addr) != addr
+    return -1;
+
+  // 3. Iterar sobre el número de páginas
+  for (a = addr; a < addr + (uint64)len * PGSIZE; a += PGSIZE)
+  {
+    // 4. Validar que la dirección esté en el espacio de usuario
+    if (a >= MAXVA)
+      return -1;
+
+    // 5. Encontrar el PTE (walk con alloc=0)
+    pte = walk(pagetable, a, 0);
+
+    // 6. Validar el PTE
+    if (pte == 0) // Página no mapeada
+      return -1;
+
+    if ((*pte & PTE_V) == 0) // Página no válida
+      return -1;
+
+    if ((*pte & PTE_U) == 0) // No es una página de usuario
+      return -1;
+
+    // 7. Modificar el bit PTE_R
+    if (enable_read) {
+      // munrdprotect: Restaurar (set) el bit de lectura
+      *pte |= PTE_R;
+    } else {
+      // mrdprotect: Limpiar (clear) el bit de lectura
+      *pte &= ~PTE_R;
+    }
+  }
+
+  // 8. Éxito
+  return 0;
+}
